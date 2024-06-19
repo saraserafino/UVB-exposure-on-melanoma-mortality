@@ -1,2 +1,5 @@
-# UVB-exposure-on-melanoma-mortality
-Exam project for "Bayesian Statistics" @ UniTS
+# UVB exposure on melanoma mortality
+
+This exam project of "Bayesian Statistics" reproduces some results of the paper [Multi-level modelling of geographically aggregated health data: a case study on malignant melanoma mortality and UV exposure in the European Community](https://pubmed.ncbi.nlm.nih.gov/9463848/) using the `R` package `mlmRev` which contains the `Mmmec` dataset on malignant melanoma mortality in 9 nations of the European Community during 1971-1980.
+It has the goal of performing some explorative analysis also with a Bayesian approach, building a model for the number of male deaths taking into account the hierarchical data structure (counties within regions within nations) and lastly comparing the results with the paper.
+A `stan` model is written to this scope. The compiled project in R is presented both in a R markdown and html format. There is also a self-contained presentation that includes any relevant data analysis (plots, tables, equations) with comments to the results.
