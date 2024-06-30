@@ -37,13 +37,13 @@ summary(Mmmec$uvb)
 ggplot(Mmmec, aes(x = deaths)) +
   geom_histogram(binwidth = 1, fill = "red", color = "black") +
   ggtitle("Distribution of Deaths")
-ggsave(file="distribution_deaths.pdf", width=12,height=7)
+ggsave(file="images/distribution_deaths.pdf", width=12,height=7)
 
 # Only expected deaths
 ggplot(Mmmec, aes(x = expected)) +
   geom_histogram(binwidth = 1, fill = "yellow", color = "black") +
   ggtitle("Distribution of Expected Deaths")
-ggsave(file="distribution_expecteddeaths.pdf", width=12,height=7)
+ggsave(file="images/distribution_expecteddeaths.pdf", width=12,height=7)
 
 # Both deaths and expected deaths
 # Gather the data into a long format using pivot_longer
@@ -55,7 +55,7 @@ ggplot(Mmmec_long, aes(x = value, fill = type)) +
   ggtitle("Distribution of Deaths and Expected Deaths") +
   xlab("Deaths / Expected Deaths") +
   scale_fill_manual(values = c("deaths" = "red", "expected" = "yellow"), labels = c("Deaths", "Expected Deaths"))
-ggsave(file="distribution_deaths_expected.pdf", width=12,height=7)
+ggsave(file="images/distribution_deaths_expected.pdf", width=12,height=7)
 
 # Some scatter plots of deaths VS UVB exposure
 
@@ -65,7 +65,7 @@ ggplot(Mmmec, aes(x = uvb, y = deaths, color = nation)) +
   scale_colour_manual(values = custom_palette) +
   ggtitle("Deaths VS UVB Exposure") +
   geom_jitter()
-ggsave(file="scatter_deaths_vs_uvb.pdf", width=9.3,height=7)
+ggsave(file="images/scatter_deaths_vs_uvb.pdf", width=9.3,height=7)
 
 # With a regression line for each nation
 ggplot(Mmmec, aes(x = uvb, y = deaths, color = nation)) +
@@ -73,7 +73,7 @@ ggplot(Mmmec, aes(x = uvb, y = deaths, color = nation)) +
   scale_colour_manual(values = custom_palette) +
   ggtitle("Deaths VS UVB Exposure") +
   geom_jitter()
-ggsave(file="scatter_deaths_vs_uvb_regression_by_nation.pdf", width=9.3,height=7)
+ggsave(file="images/scatter_deaths_vs_uvb_regression_by_nation.pdf", width=9.3,height=7)
 
 # Or dividing by nation using facet_wrap
 ggplot(Mmmec, aes(x = uvb, y = deaths, color = nation)) +
@@ -83,39 +83,40 @@ ggplot(Mmmec, aes(x = uvb, y = deaths, color = nation)) +
   scale_colour_manual(values = custom_palette) +
   ggtitle("Deaths VS UVB Exposure by Nation") +
   theme(legend.position = "none")
-ggsave(file="scatter_deaths_vs_uvb_by_nation.pdf", width=8,height=7)
+ggsave(file="images/scatter_deaths_vs_uvb_by_nation.pdf", width=8,height=7)
 
 # Boxplots of deaths by nation
 ggplot(Mmmec, aes(x = nation, y = deaths)) +
   geom_boxplot(fill = custom_palette)
-ggsave(file="boxplot_deaths_by_nation.pdf", width=8,height=7)
+ggsave(file="images/boxplot_deaths_by_nation.pdf", width=8,height=7)
 
 
 # Generalized linear mixed model with frequentist approach (in particular ML approach)
-M1 <- glmer(deaths ~ uvb + (1 | region), Mmmec, poisson, offset = log(expected))
+M1 <- glmer(deaths ~ uvb + (1 | region) + (1 | nation), Mmmec, poisson, offset = log(expected))
 # (1|region) includes varying intercepts for each region
 # log(expected) is an offset term to adjust the model to account for the expected number of deaths
 summary(M1)
 
 
 # Bayes approach relying on HMC sampling from the posterior distribution
-M1.rstanarm <- stan_glmer(deaths ~ uvb + (1 | region), Mmmec, poisson, offset = log(expected))
+M1.rstanarm <- stan_glmer(deaths ~ uvb + (1 | region) + (1 | nation), Mmmec, poisson, offset = log(expected))
 print(M1.rstanarm)
 summary(M1.rstanarm)
 
-# Compute AIC, BIC and log-likelihood for comparing with M1 results
-log_lik_M1rs <- log_lik(M1.rstanarm)
-log_likelihood_M1rs <- sum(log_lik_M1rs)
-print(log_likelihood_M1rs)
+# Compute AIC and BIC for comparing with M1 results
+loo_M1rs <- loo(M1.rstanarm) # extract LOO
+print(loo_M1rs)
+elpd_loo_M1rs <- loo_M1rs$estimates["elpd_loo", "Estimate"]
 p <- length(M1.rstanarm$coefficients) # number of estimated parameters
 n <- length(M1.rstanarm$y) # number of observations = 354
-aic_M1rs <- - 2 * log_likelihood_M1rs + 2 * p
-print(aic_M1rs)
-bic_M1rs <- - 2 * log_likelihood_M1rs + log(n) * p
-print(bic_M1rs)
+aic_M1rs <- - 2 * elpd_loo_M1rs + 2 * p
+print(aic_M1rs) # AIC
+bic_M1rs <- - 2 * elpd_loo_M1rs + log(n) * p
+print(bic_M1rs) # BIC
+
 
 # Posterior predictive check of reproduced data
-pdf("densitiesM1rstanarm.pdf", width=8, height=7)
+pdf("images/densitiesM1rstanarm.pdf", width=8, height=7)
 pp_check(M1.rstanarm)
 dev.off()
 
@@ -126,7 +127,7 @@ for (i in 1:51){
   alpha_names[i] <- paste0(expression(alpha), "[", i,"]")
 }
 posterior_M1 <- as.matrix(M1.rstanarm)
-pdf("logistic_credible_intervals.pdf", width=10, height=11)
+pdf("images/logistic_credible_intervals.pdf", width=10, height=11)
 mcmc_intervals(posterior_M1, regex_pars=c( "uvb",
                                            "(Intercept)", "b"))+
   xaxis_text(on =TRUE, size=rel(1.9))+
@@ -138,10 +139,10 @@ dev.off()
 mcmc_areas(posterior_M1, regex_pars = c("uvb"))+
   xaxis_text(on =TRUE, size=rel(1.9))+
   yaxis_text(on =TRUE, size=rel(1.4))
-ggsave(file = "logistic_fixed_effects.pdf", width=8, height=7)
+ggsave(file = "images/logistic_fixed_effects.pdf", width=8, height=7)
 
 # Plot the random effects (posterior mean +- s.e.)
-pdf("random_effects_log.pdf", height =7, width =11)
+pdf("images/random_effects_log.pdf", height =7, width =11)
 int_ord <- sort(coef(M1.rstanarm)$region[,1], index.return=TRUE)$x
 ord <- sort(coef(M1.rstanarm)$region[,1], index.return=TRUE)$ix
 region.abbr <- as.character(1:79)
@@ -199,26 +200,26 @@ y_rep <- as.matrix(fit_model_A, pars = "y_rep")
 
 # Posterior predictive checking
 
-pdf(file="traceplot.pdf", width=8, height=7)
+pdf(file="images/traceplot.pdf", width=8, height=7)
 traceplot(fit_model_A, pars = c('beta0', 'beta1', 'sigma_s', 'sigma_u', 'sigma_e'))
 dev.off()
 
 # densities 
-pdf(file="densities.pdf", width=8, height=7)
+pdf(file="images/densities.pdf", width=8, height=7)
 ppc_dens_overlay(y = stan_data$deaths, y_rep[1:200,])+
   xaxis_text(on =TRUE, size=22)+
   legend_text(size=rel(4))
 dev.off()
 
 # empirical distribution function
-pdf(file="ecdf.pdf", width=8, height=7)
+pdf(file="images/ecdf.pdf", width=8, height=7)
 ppc_ecdf_overlay(y = stan_data$deaths, y_rep[1:200,])+
   xaxis_text(on =TRUE, size=22)+
   legend_text(size=rel(4))
 dev.off()
 
 # proportion of zero
-pdf(file="proportion_zero.pdf", width =8, height =7)
+pdf(file="images/proportion_zero.pdf", width =8, height =7)
 prop_zero <- function(x) mean(x == 0)
 ppc_stat(y = stan_data$deaths, yrep = y_rep, stat = "prop_zero")+
   xaxis_text(on =TRUE, size=22)+
@@ -227,25 +228,25 @@ ppc_stat(y = stan_data$deaths, yrep = y_rep, stat = "prop_zero")+
 dev.off()
 
 # statistics
-pdf(file="mean.pdf", width=5, height=5)
+pdf(file="images/mean.pdf", width=5, height=5)
 ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="mean")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
 dev.off()
-pdf(file="sd.pdf", width=5, height=5)
+pdf(file="images/sd.pdf", width=5, height=5)
 ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="sd")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
 dev.off()
-pdf(file="median.pdf", width=5, height=5)
+pdf(file="images/median.pdf", width=5, height=5)
 ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="median")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
 dev.off()
-pdf(file="max.pdf", width=5, height=5)
+pdf(file="images/max.pdf", width=5, height=5)
 ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="max")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
@@ -253,7 +254,7 @@ ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="max")+
 dev.off()
 
 # standardized residuals
-pdf(file="standardized_residuals.pdf", width =8, height =7)
+pdf(file="images/standardized_residuals.pdf", width =8, height =7)
 mean_y_rep <- colMeans(y_rep)
 std_resid <- (stan_data$deaths - mean_y_rep) / sqrt(mean_y_rep)
 qplot(mean_y_rep, std_resid) + hline_at(2) + hline_at(-2)+
@@ -265,7 +266,7 @@ qplot(mean_y_rep, std_resid) + hline_at(2) + hline_at(-2)+
 dev.off()
 
 # predictive intervals
-pdf(file="predictive_intervals.pdf", width =8, height =7)
+pdf(file="images/predictive_intervals.pdf", width =8, height =7)
 ppc_intervals(
   y = stan_data$deaths, 
   yrep = y_rep,
@@ -278,14 +279,13 @@ ppc_intervals(
         axis.title.y = element_text(size=20))
 dev.off()
 
-# Compute AIC, BIC and log-likelihood for comparing with M1 results
+# Compute AIC, BIC and log-likelihood for comparing with previous results
 log_lik_A <- extract_log_lik(fit_model_A)
 loo_A <- loo(log_lik_A)
 print(loo_A)
-log_likelihood_A <- sum(log_lik_A)
-print(log_likelihood_A)
+elpd_loo_A <- loo_A$estimates["elpd_loo", "Estimate"]
 p <- 5 + length(unique(Mmmec2$nation)) + length(unique(Mmmec2$region)) + nrow(Mmmec2) # number of estimated parameters
-aic_A <- - 2 * log_likelihood_A + 2 * p
+aic_A <- - 2 * elpd_loo_A + 2 * p
 print(aic_A)
-bic_A <- - 2 * log_likelihood_A + log(n) * p
+bic_A <- - 2 * elpd_loo_A + log(n) * p
 print(bic_A)

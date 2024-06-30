@@ -53,7 +53,7 @@ model {
 } 
 generated quantities {
   int y_rep[N];     // Generated quantities for replicated data
-  real log_lik[N];  // Pointwise log-likelihood
+  vector[N] log_lik;  // Pointwise log-likelihood
   
   for (n in 1:N) {
     real eta_n = log(expected[n]) + beta0 + beta1 * UVBI[n] + s[k[n]] + u[j[n]] + e[n];
