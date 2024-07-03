@@ -285,7 +285,16 @@ loo_A <- loo(log_lik_A)
 print(loo_A)
 elpd_loo_A <- loo_A$estimates["elpd_loo", "Estimate"]
 p <- 5 + length(unique(Mmmec2$nation)) + length(unique(Mmmec2$region)) + nrow(Mmmec2) # number of estimated parameters
-aic_A <- - 2 * elpd_loo_A + 2 * p
+aic_A <- - 2 * elpd_loo_A
 print(aic_A)
-bic_A <- - 2 * elpd_loo_A + log(n) * p
+bic_A <- - 2 * elpd_loo_A
 print(bic_A)
+
+# Il problema è che non puoi usare elpd_loo ma devi usare elpd_aic e _bic che ottieni dalla likelihood che è troppo grande
+
+# Calcola AIC
+aic_A2 <- - 2 * elpd_loo_A + 2 * p
+print(aic_A2) # AIC
+bic_A2 <- - 2 * elpd_loo_A + log(n) * p
+print(bic_A2) # BIC
+
