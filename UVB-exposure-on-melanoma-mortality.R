@@ -90,9 +90,9 @@ ggplot(Mmmec, aes(x = nation, y = deaths)) +
 ggsave(file="images/boxplot_deaths_by_nation.pdf", width=8,height=7)
 
 
-# Generalized linear mixed model with frequentist approach (in particular ML approach)
+# Generalized linear mixed model with frequentist approach (in particular hierarchical approach)
 M1 <- glmer(deaths ~ uvb + (1 | region) + (1 | nation), Mmmec, poisson, offset = log(expected))
-# (1|region) includes varying intercepts for each region
+# (1 | k) includes varying intercepts for each k
 # log(expected) is an offset term to adjust the model to account for the expected number of deaths
 summary(M1)
 
@@ -106,9 +106,12 @@ loo_M1rs <- loo(M1.rstanarm)
 print(loo_M1rs)
 
 
-# Posterior predictive check of reproduced data
+# Posterior predictive checks
+y_rep <- posterior_predict(M1.rstanarm)
+
+# densities 
 pp_check(M1.rstanarm)
-ggsave(file="images/densitiesM1rstanarm.pdf", width=8,height=7)
+ggsave(file="images/densities_M1rstanarm.pdf", width=8,height=7)
 
 # Plot the credible intervals
 beta_names <- c(paste0("beta^", c("uvb")), "gl.intercept")
@@ -165,8 +168,74 @@ for (h in 1:length(int_ord)){
 }
 ggsave(file="images/random_effects_log.pdf", height=7, width=length(int_ord) * 0.4)
 
+# empirical distribution function
+ppc_ecdf_overlay(y = M1.rstanarm$y, y_rep[1:200,])+
+  xaxis_text(on =TRUE, size=22)+
+  legend_text(size=rel(4))
+ggsave(file="images/ecdf_M1.rstanarm.pdf", width=8, height=7)
 
-## Poisson regression
+# proportion of zero
+prop_zero <- function(x) mean(x == 0)
+ppc_stat(y = M1.rstanarm$y, yrep = y_rep, stat = "prop_zero")+
+  xaxis_text(on =TRUE, size=22)+
+  yaxis_text(on =TRUE, size=22)+
+  legend_text(size=rel(4))
+ggsave(file="images/proportion_zero_M1.rstanarm.pdf", width=8, height=7)
+
+# statistics
+ppc_stat(y = M1.rstanarm$y, yrep = y_rep, stat="mean")+
+  xaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text( size=22))+
+  legend_text(size=rel(1.6))
+ggsave(file="images/mean_M1.rstanarm.pdf", width=5, height=5)
+
+ppc_stat(y = M1.rstanarm$y, yrep = y_rep, stat="sd")+
+  xaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text( size=22))+
+  legend_text(size=rel(1.6))
+ggsave(file="images/sd_M1.rstanarm.pdf", width=5, height=5)
+
+ppc_stat(y = M1.rstanarm$y, yrep = y_rep, stat="median")+
+  xaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text( size=22))+
+  legend_text(size=rel(1.6))
+ggsave(file="images/median_M1.rstanarm.pdf", width=5, height=5)
+
+ppc_stat(y = M1.rstanarm$y, yrep = y_rep, stat="max")+
+  xaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text( size=22))+
+  legend_text(size=rel(1.6))
+ggsave(file="images/max_M1.rstanarm.pdf", width=5, height=5)
+
+# standardized residuals
+mean_y_rep <- colMeans(y_rep)
+std_resid <- (M1.rstanarm$y - mean_y_rep) / sqrt(mean_y_rep)
+qplot(mean_y_rep, std_resid) + hline_at(2) + hline_at(-2)+
+  labs(x="Mean of y_rep", y= "Standardized residuals")+
+  xaxis_text(on =TRUE, size=22)+
+  yaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text(size=16),
+        axis.title.y = element_text(size=16))
+ggsave(file="images/standardized_residuals_M1.rstanarm.pdf", width =8, height =7)
+
+# predictive intervals
+ppc_intervals(
+  y = M1.rstanarm$y, 
+  yrep = y_rep) + 
+  labs(x = "Deaths", y = "Expected deaths")+
+  xaxis_text(on =TRUE, size=22)+
+  yaxis_text(on =TRUE, size=22)+
+  theme(axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20))
+ggsave(file="images/predictive_intervals_M1.rstanarm.pdf", width =8, height =7)
+
+
+
+# Stan model of model A of the paper
+# It is a variance components model with UVBI included in the fixed part of the model and
+# random terms s_k, u_jk, e_ijk associated respectively with the intercept at level 3, 2, 1
+# s_k ~ normal(0, sigma_s)
+# u_jk ~ normal(0, sigma_u)
 
 # Create UVB index as in Table III of the paper
 uvbi_params <- data.frame(
@@ -193,77 +262,77 @@ stan_data <- list(
   UVBI = Mmmec2$UVBI
 )
 comp_model_A <- stan_model('poisson_regression.stan')
-fit_model_A <- sampling(comp_model_A, data = stan_data, seed = 123)
+fit_model_A <- sampling(comp_model_A, data = stan_data, seed = 123, iter=4000)
 print(fit_model_A, pars = c('beta0','beta1','sigma_s','sigma_u','sigma_e'))
-y_rep <- as.matrix(fit_model_A, pars = "y_rep")
+y_rep_model_A <- as.matrix(fit_model_A, pars = "y_rep")
 
 
-# Posterior predictive checking
+# Posterior predictive checks
 
+# Traceplot of the 4 chains to see if they mix well
 traceplot(fit_model_A, pars = c('beta0', 'beta1', 'sigma_s', 'sigma_u', 'sigma_e'))
 ggsave(file="images/traceplot.pdf", width=8, height=7)
 
-
 # densities 
-ppc_dens_overlay(y = stan_data$deaths, y_rep[1:200,])+
+ppc_dens_overlay(y = stan_data$deaths, y_rep_model_A[1:200,])+
   xaxis_text(on =TRUE, size=22)+
   legend_text(size=rel(4))
-ggsave(file="images/densities.pdf", width=8, height=7)
+ggsave(file="images/densities_model_A.pdf", width=8, height=7)
 
 # empirical distribution function
-ppc_ecdf_overlay(y = stan_data$deaths, y_rep[1:200,])+
+ppc_ecdf_overlay(y = stan_data$deaths, y_rep_model_A[1:200,])+
   xaxis_text(on =TRUE, size=22)+
   legend_text(size=rel(4))
-ggsave(file="images/ecdf.pdf", width=8, height=7)
+ggsave(file="images/ecdf_model_A.pdf", width=8, height=7)
 
 # proportion of zero
 prop_zero <- function(x) mean(x == 0)
-ppc_stat(y = stan_data$deaths, yrep = y_rep, stat = "prop_zero")+
+ppc_stat(y = stan_data$deaths, yrep = y_rep_model_A, stat = "prop_zero")+
   xaxis_text(on =TRUE, size=22)+
   yaxis_text(on =TRUE, size=22)+
   legend_text(size=rel(4))
-ggsave(file="images/proportion_zero.pdf", width=8, height=7)
+ggsave(file="images/proportion_zero_model_A.pdf", width=8, height=7)
 
 # statistics
-ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="mean")+
+ppc_stat(y = stan_data$deaths, yrep = y_rep_model_A, stat="mean")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
-ggsave(file="images/mean.pdf", width=5, height=5)
+ggsave(file="images/mean_model_A.pdf", width=5, height=5)
 
-ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="sd")+
+ppc_stat(y = stan_data$deaths, yrep = y_rep_model_A, stat="sd")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
-ggsave(file="images/sd.pdf", width=5, height=5)
+ggsave(file="images/sd_model_A.pdf", width=5, height=5)
 
-ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="median")+
+ppc_stat(y = stan_data$deaths, yrep = y_rep_model_A, stat="median")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
-ggsave(file="images/median.pdf", width=5, height=5)
+ggsave(file="images/median_model_A.pdf", width=5, height=5)
 
-ppc_stat(y = stan_data$deaths, yrep = y_rep, stat="max")+
+ppc_stat(y = stan_data$deaths, yrep = y_rep_model_A, stat="max")+
   xaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text( size=22))+
   legend_text(size=rel(1.6))
-ggsave(file="images/max.pdf", width=5, height=5)
+ggsave(file="images/max_model_A.pdf", width=5, height=5)
 
 # standardized residuals
-mean_y_rep <- colMeans(y_rep)
-std_resid <- (stan_data$deaths - mean_y_rep) / sqrt(mean_y_rep)
-qplot(mean_y_rep, std_resid) + hline_at(2) + hline_at(-2)+
+mean_y_rep_model_A <- colMeans(y_rep_model_A)
+std_resid <- (stan_data$deaths - mean_y_rep_model_A) / sqrt(mean_y_rep_model_A)
+qplot(mean_y_rep_model_A, std_resid) + hline_at(2) + hline_at(-2)+
   labs(x="Mean of y_rep", y= "Standardized residuals")+
   xaxis_text(on =TRUE, size=22)+
   yaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text(size=16),
         axis.title.y = element_text(size=16))
-ggsave(file="images/standardized_residuals.pdf", width =8, height =7)
+ggsave(file="images/standardized_residuals_model_A.pdf", width =8, height =7)
 
 # predictive intervals
 ppc_intervals(
   y = stan_data$deaths, 
-  yrep = y_rep,
+  yrep = y_rep_model_A,
   x = stan_data$uvb
 ) + 
   labs(x = "Deaths", y = "Expected deaths")+
@@ -271,11 +340,10 @@ ppc_intervals(
   yaxis_text(on =TRUE, size=22)+
   theme(axis.title.x = element_text(size=20),
         axis.title.y = element_text(size=20))
-ggsave(file="images/predictive_intervals.pdf", width =8, height =7)
+ggsave(file="images/predictive_intervals_model_A.pdf", width =8, height =7)
 
 # Extract Leave-One-Out Cross-Validation
 # Note that since I wrote my own stan model, I had to store the pointwise log-likelihood
 log_lik_A <- extract_log_lik(fit_model_A)
 loo_A <- loo(log_lik_A)
 print(loo_A)
-
