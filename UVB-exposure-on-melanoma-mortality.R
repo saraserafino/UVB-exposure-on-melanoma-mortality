@@ -96,7 +96,6 @@ M1 <- glmer(deaths ~ uvb + (1 | region) + (1 | nation), Mmmec, poisson, offset =
 # log(expected) is an offset term to adjust the model to account for the expected number of deaths
 summary(M1)
 
-
 # Bayes approach relying on HMC sampling from the posterior distribution
 M1.rstanarm <- stan_glmer(deaths ~ uvb + (1 | region) + (1 | nation), Mmmec, poisson, offset = log(expected))
 print(M1.rstanarm)
@@ -112,20 +111,32 @@ pp_check(M1.rstanarm)
 ggsave(file="images/densitiesM1rstanarm.pdf", width=8,height=7)
 
 # Plot the credible intervals
-## CONTROLLA ALPHA
 beta_names <- c(paste0("beta^", c("uvb")), "gl.intercept")
 alpha_names<-c()
-for (i in 1:90){
-  alpha_names[i] <- paste0(expression(alpha), "[", i,"]")
+for (i in 1:25){
+  alpha_names[i] <- paste0("region[", i,"]")
+} # region 26 is missing
+for (i in 27:79){
+  alpha_names[i-1] <- paste0("region[", i,"]")
 }
+alpha_names[79] <- paste0("Belgium")
+alpha_names[80] <- paste0("WG")
+alpha_names[81] <- paste0("Denmark")
+alpha_names[82] <- paste0("France")
+alpha_names[83] <- paste0("UK")
+alpha_names[84] <- paste0("Italy")
+alpha_names[85] <- paste0("Ireland")
+alpha_names[86] <- paste0("Luxembourg")
+alpha_names[87] <- paste0("Netherlands")
+alpha_names[88] <- paste0(expression(sigma[region]))
+alpha_names[89] <- paste0(expression(sigma[nation]))
 posterior_M1 <- as.matrix(M1.rstanarm)
 mcmc_intervals(posterior_M1, regex_pars=c( "uvb",
                                            "(Intercept)", "b"))+
   xaxis_text(on =TRUE, size=rel(1.9))+
   yaxis_text(on =TRUE, size=rel(1.4))+
   scale_y_discrete(labels = ((parse(text= c(beta_names, alpha_names)))))
-ggsave(file="images/logistic_credible_intervals.pdf", width=10, height=25)
-
+ggsave(file="images/logistic_credible_intervals.pdf", width=5, height=length(alpha_names) * 0.25)
 
 # Plot the posterior marginal densities along with 50% intervals for the ‘fixed-effects’ uvb
 mcmc_areas(posterior_M1, regex_pars = c("uvb"))+
@@ -136,7 +147,7 @@ ggsave(file = "images/logistic_fixed_effects.pdf", width=8, height=7)
 # Plot the random effects (posterior mean +- s.e.)
 int_ord <- sort(coef(M1.rstanarm)$region[,1], index.return=TRUE)$x
 ord <- sort(coef(M1.rstanarm)$region[,1], index.return=TRUE)$ix
-region.abbr <- as.character(1:79)
+region.abbr <- levels(Mmmec$region)
 region.abbr.ord <- region.abbr[ord]
 se_ord <- M1.rstanarm$ses[ord]
 par(xaxt="n", mfrow=c(1,1), mar = c(5,2,2,1))
@@ -152,8 +163,7 @@ for (h in 1:length(int_ord)){
       text(h, int_ord[h]-se_ord[h]-0.1, region.abbr.ord[h], cex=1.1)
     }
 }
-ggsave(file="images/random_effects_log.pdf", height =7, width =11)
-
+ggsave(file="images/random_effects_log.pdf", height=7, width=length(int_ord) * 0.4)
 
 
 ## Poisson regression
