@@ -108,7 +108,7 @@ print(loo_M1rs)
 # Using 10-fold CV as suggested by warning due to some observations with too high pareto_k,
 # there is a warning about 1 divergent transition after warmup
 #kfold_result <- kfold(M1.rstanarm, K = 10)
-# But since Rhat=1 and ESS (n_eff)>1000, the resulting posterior is often good enough to move forward
+# But since Rhat=1 and ESS (n_eff)>1000 for every parameter, the resulting posterior is often good enough to move forward
 
 
 # Posterior predictive checks
@@ -273,24 +273,22 @@ y_rep_model_A <- as.matrix(fit_model_A, pars = "y_rep")
 
 # Checks due to warnings
 
-check_divergences(fit_model_A) # no divergences
-check_treedepth(fit_model_A) # no saturations of max tree depths of 10
+check_divergences(fit_model_A)
+check_treedepth(fit_model_A)
 check_energy(fit_model_A)
-# Bayesian Fraction of Missing Information is in fact low. This implies that the adaptation phase of the Markov
-# chains did not turn out well or the posterior has thick tails that were not well explored in the simulation.
-# Should reparametrize the model but then it would be different from the paper's
+# Bayesian Fraction of Missing Information is in fact low
+# but reparametrizing the model would make it different from the paper's
 
 # The warning about bulk and tail ESS too low disappears with 8000 iterations instead of 4000
-draws <- as_draws_array(fit_model_A)
-ess <- summarise_draws(draws)
-print(ess)
-# For iter=8000: ess_bulk=547, ess_tail=927, Rhat=1.00
-# But since posterior predictive checks do not improve significantly, it is unnecessary
+# but since posterior predictive checks do not improve significantly, it is unnecessary to use 8000
+ess <- summarise_draws(as_draws_array(fit_model_A))
+print(ess[1:5,c(1, 8, 9, 10)])
+# For sigma_e with iter=8000: ess_bulk=547, ess_tail=927, Rhat=1.00
 
 
 # Posterior predictive checks
 
-# Traceplot of the 4 chains to see if they mix well
+# Traceplot of the 4 chains to see if they mix well: sigma_e is in fact not as good as the others
 traceplot(fit_model_A, pars = c('beta0', 'beta1', 'sigma_s', 'sigma_u', 'sigma_e'))
 ggsave(file="images/traceplot.pdf", width=8, height=7)
 
@@ -364,7 +362,6 @@ ppc_intervals(
 ggsave(file="images/predictive_intervals_model_A.pdf", width =8, height =7)
 
 # Extract Leave-One-Out Cross-Validation
-# Note that since I wrote my own stan model, I had to store the pointwise log-likelihood
-log_lik_A <- extract_log_lik(fit_model_A)
+log_lik_A <- extract_log_lik(fit_model_A) # extract pointwise log-likelihood from stan model
 loo_A <- loo(log_lik_A)
 print(loo_A)
