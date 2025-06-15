@@ -7,6 +7,7 @@ library(dplyr) # for %>%
 library(truncnorm) # for rnorm with minimum and maximum values
 library(loo)
 library(lubridate) # for simplifying working with dates
+library(posterior) # for checking warnings of stan model
 
 # Create custom palette because I want to distinguish well between nations and don't like the existing options
 custom_palette <- c("#9F002E", "#B23AEE", "#FF50FF", "#FF7F00", "#FFB900", "#00EEEE", "#4EEE94","#458B00", "#4876FF")
@@ -104,6 +105,10 @@ summary(M1.rstanarm)
 # Extract Leave-One-Out Cross-Validation
 loo_M1rs <- loo(M1.rstanarm)
 print(loo_M1rs)
+# Using 10-fold CV as suggested by warning due to some observations with too high pareto_k,
+# there is a warning about 1 divergent transition after warmup
+#kfold_result <- kfold(M1.rstanarm, K = 10)
+# But since Rhat=1 and ESS (n_eff)>1000, the resulting posterior is often good enough to move forward
 
 
 # Posterior predictive checks
@@ -265,6 +270,22 @@ comp_model_A <- stan_model('poisson_regression.stan')
 fit_model_A <- sampling(comp_model_A, data = stan_data, seed = 123, iter=4000)
 print(fit_model_A, pars = c('beta0','beta1','sigma_s','sigma_u','sigma_e'))
 y_rep_model_A <- as.matrix(fit_model_A, pars = "y_rep")
+
+# Checks due to warnings
+
+check_divergences(fit_model_A) # no divergences
+check_treedepth(fit_model_A) # no saturations of max tree depths of 10
+check_energy(fit_model_A)
+# Bayesian Fraction of Missing Information is in fact low. This implies that the adaptation phase of the Markov
+# chains did not turn out well or the posterior has thick tails that were not well explored in the simulation.
+# Should reparametrize the model but then it would be different from the paper's
+
+# The warning about bulk and tail ESS too low disappears with 8000 iterations instead of 4000
+draws <- as_draws_array(fit_model_A)
+ess <- summarise_draws(draws)
+print(ess)
+# For iter=8000: ess_bulk=547, ess_tail=927, Rhat=1.00
+# But since posterior predictive checks do not improve significantly, it is unnecessary
 
 
 # Posterior predictive checks
